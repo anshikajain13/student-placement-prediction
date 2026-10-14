@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Placement Predictor</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Figtree:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --paper:   #EEF2F7;
+    --card:    #FFFFFF;
+    --ink:     #1B2A41;
+    --muted:   #5B6B82;
+    --line:    #D5DDE8;
+    --cobalt:  #2F5BEA;
+    --cobalt-d:#2347BD;
+    --placed:  #167A52;
+    --placed-bg:#E3F4EC;
+    --not:     #B4400E;
+    --not-bg:  #FCEBDD;
+    --radius:  14px;
+    --display: "Bricolage Grotesque", "Trebuchet MS", system-ui, sans-serif;
+    --body:    "Figtree", system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--body);
+    font-size: 16px;
+    line-height: 1.5;
+  }
+  .wrap { max-width: 1120px; margin: 0 auto; padding: 32px 20px 64px; }
+
+  /* ---------- Header ---------- */
+  header { display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; flex-wrap: wrap; margin-bottom: 28px; }
+  h1 {
+    font-family: var(--display);
+    font-weight: 800;
+    font-size: clamp(2rem, 5vw, 3.1rem);
+    line-height: 1.05;
+    letter-spacing: -0.02em;
+    margin: 0 0 8px;
+  }
+  header p { margin: 0; color: var(--muted); max-width: 52ch; }
+  .status {
+    display: inline-flex; align-items: center; gap: 8px;
+    font-size: .875rem; font-weight: 500; color: var(--muted);
+    background: var(--card); border: 1px solid var(--line);
+    padding: 7px 12px; border-radius: 999px;
+  }
+  .dot { width: 9px; height: 9px; border-radius: 50%; background: #AAB4C3; }
+  .status.ok .dot { background: var(--placed); }
+  .status.bad .dot { background: var(--not); }
+
+  /* ---------- Layout ---------- */
+  .grid { display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr); gap: 24px; align-items: start; }
+  @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } }
+
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); }
+  form.card { padding: 8px 28px 28px; }
+  fieldset { border: 0; margin: 0; padding: 22px 0 6px; }
+  fieldset + fieldset { border-top: 1px solid var(--line); }
+  legend {
+    font-family: var(--display); font-weight: 600; font-size: 1.15rem;
+    padding: 0; margin-bottom: 14px; float: left; width: 100%;
+  }
+  legend + * { clear: both; }
+  .fields { display: grid; grid-template-columns: 1fr 1fr; gap: 18px 24px; }
+  @media (max-width: 560px) { .fields { grid-template-columns: 1fr; } form.card { padding: 4px 18px 22px; } }
+
+  label, .label { display: block; font-size: .9rem; font-weight: 600; margin-bottom: 6px; }
+  .hint { font-weight: 400; color: var(--muted); }
+
+  select, input[type=number] {
+    width: 100%; font: inherit; color: var(--ink);
+    background: #F7F9FC; border: 1px solid var(--line); border-radius: 10px;
+    padding: 10px 12px;
+  }
+  select:hover, input[type=number]:hover { border-color: #B5C1D2; }
+
+  /* Segmented control */
+  .seg { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; background: #F7F9FC; border: 1px solid var(--line); border-radius: 10px; padding: 3px; gap: 3px; }
+  .seg input { position: absolute; opacity: 0; pointer-events: none; }
+  .seg label {
+    margin: 0; text-align: center; padding: 7px 10px; border-radius: 8px;
+    font-weight: 500; cursor: pointer; color: var(--muted);
+    transition: background .15s, color .15s;
+  }
+  .seg input:checked + label { background: var(--cobalt); color: #fff; font-weight: 600; }
+  .seg input:focus-visible + label { outline: 3px solid #9DB4FF; outline-offset: 1px; }
+
+  /* Numeric field with slider */
+  .num { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 8px 10px; }
+  .num .unit { color: var(--muted); font-size: .85rem; min-width: 2.2em; }
+  .num input[type=number] { grid-column: 1; }
+  .num .unit { grid-column: 2; }
+  .num input[type=range] { grid-column: 1 / -1; width: 100%; margin: 2px 0 0; accent-color: var(--cobalt); }
+
+  :focus-visible { outline: 3px solid #9DB4FF; outline-offset: 2px; }
+  select:focus-visible, input[type=number]:focus-visible { border-color: var(--cobalt); outline-offset: 0; }
+  input.invalid { border-color: var(--not); background: #FFF8F3; }
+
+  .actions { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 22px; }
+  button {
+    font: inherit; font-weight: 600; cursor: pointer;
+    border-radius: 10px; padding: 12px 20px; border: 1px solid transparent;
+  }
+  .primary { background: var(--cobalt); color: #fff; flex: 1 1 200px; font-size: 1.02rem; }
+  .primary:hover { background: var(--cobalt-d); }
+  .primary:disabled { opacity: .65; cursor: progress; }
+  .ghost { background: transparent; color: var(--ink); border-color: var(--line); }
+  .ghost:hover { background: #F2F5F9; }
+
+  /* ---------- Result panel ---------- */
+  aside { position: sticky; top: 20px; display: grid; gap: 18px; }
+  @media (max-width: 900px) { aside { position: static; } }
+  .result { padding: 26px; min-height: 250px; display: flex; flex-direction: column; justify-content: center; }
+  .result .empty h2 { font-family: var(--display); font-size: 1.3rem; margin: 0 0 6px; }
+  .result .empty p { margin: 0; color: var(--muted); }
+
+  .verdict { border-radius: 10px; padding: 18px 20px; border: 2px solid; }
+  .verdict small { display: block; font-weight: 600; font-size: .85rem; margin-bottom: 2px; }
+  .verdict strong { display: block; font-family: var(--display); font-weight: 800; font-size: clamp(2rem, 4.5vw, 2.7rem); line-height: 1.05; letter-spacing: -0.02em; }
+  .verdict.placed { background: var(--placed-bg); border-color: var(--placed); color: var(--placed); }
+  .verdict.not    { background: var(--not-bg);    border-color: var(--not);    color: var(--not); }
+  .verdict.stamp { animation: stamp .45s cubic-bezier(.2, 1.4, .4, 1) both; }
+  @keyframes stamp { from { transform: scale(1.18) rotate(-2deg); opacity: 0; } to { transform: none; opacity: 1; } }
+
+  .advice { margin: 14px 0 0; color: var(--ink); }
+  .recap { margin: 16px 0 0; padding: 14px 0 0; border-top: 1px solid var(--line); display: grid; grid-template-columns: 1fr 1fr; gap: 6px 16px; font-size: .88rem; }
+  .recap dt { color: var(--muted); }
+  .recap dd { margin: 0; font-weight: 600; text-align: right; }
+  .recap div { display: flex; justify-content: space-between; gap: 8px; }
+
+  .error { background: #FFF1EC; border: 1px solid #F0B9A0; color: #7A2A08; border-radius: 10px; padding: 14px 16px; }
+  .error strong { display: block; margin-bottom: 2px; }
+  .error code { background: #fff; padding: 1px 5px; border-radius: 5px; font-size: .85em; }
+
+  .spinner { width: 28px; height: 28px; border: 3px solid var(--line); border-top-color: var(--cobalt); border-radius: 50%; animation: spin .8s linear infinite; margin: 0 auto 10px; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ---------- History ---------- */
+  .history { padding: 18px 22px; }
+  .history h3 { font-family: var(--display); font-size: 1.05rem; margin: 0 0 10px; }
+  .history ul { list-style: none; margin: 0; padding: 0; }
+  .history li { display: flex; justify-content: space-between; gap: 10px; padding: 8px 0; border-top: 1px solid var(--line); font-size: .9rem; }
+  .history li:first-child { border-top: 0; }
+  .history .tag { font-weight: 600; }
+  .history .tag.placed { color: var(--placed); }
+  .history .tag.not { color: var(--not); }
+  .history .none { color: var(--muted); margin: 0; font-size: .9rem; }
+
+  footer { margin-top: 28px; color: var(--muted); font-size: .85rem; }
+
+  @media (prefers-reduced-motion: reduce) {
+    .verdict.stamp, .spinner { animation: none; }
+    .seg label { transition: none; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div>
+      <h1>Will this student get placed?</h1>
+      <p>Enter a student's details and the decision tree model predicts their placement outcome, so the placement cell can offer support early.</p>
+    </div>
+    <div id="status" class="status" role="status"><span class="dot"></span><span id="statusText">Checking API…</span></div>
+  </header>
+
+  <div class="grid">
+
+    <form id="form" class="card" novalidate>
+      <fieldset>
+        <legend>Student profile</legend>
+        <div class="fields">
+          <div>
+            <span class="label" id="gender-label">Gender</span>
+            <div class="seg" role="radiogroup" aria-labelledby="gender-label">
+              <input type="radio" name="gender" id="g-male" value="Male" checked><label for="g-male">Male</label>
+              <input type="radio" name="gender" id="g-female" value="Female"><label for="g-female">Female</label>
+            </div>
+          </div>
+          <div>
+            <span class="label" id="extra-label">Extracurricular activities</span>
+            <div class="seg" role="radiogroup" aria-labelledby="extra-label">
+              <input type="radio" name="extracurricular" id="e-yes" value="Yes" checked><label for="e-yes">Yes</label>
+              <input type="radio" name="extracurricular" id="e-no" value="No"><label for="e-no">No</label>
+            </div>
+          </div>
+          <div style="grid-column: 1 / -1">
+            <label for="branch">Branch</label>
+            <select id="branch" name="branch">
+              <option value="CSE">CSE</option>
+              <option value="IT">IT</option>
+              <option value="ECE">ECE</option>
+              <option value="Mechanical">Mechanical</option>
+              <option value="Civil">Civil</option>
+              <option value="Commerce">Commerce</option>
+            </select>
+          </div>
+        </div>
+      </fieldset>
+
+      <fieldset>
+        <legend>Daily habits</legend>
+        <div class="fields" id="habits"></div>
+      </fieldset>
+
+      <fieldset>
+        <legend>Academic record</legend>
+        <div class="fields" id="academics"></div>
+      </fieldset>
+
+      <div class="actions">
+        <button type="submit" class="primary" id="submitBtn">Predict placement</button>
+        <button type="button" class="ghost" id="sampleBtn">Fill sample student</button>
+        <button type="button" class="ghost" id="resetBtn">Reset</button>
+      </div>
+    </form>
+
+    <aside>
+      <section class="card result" id="result" aria-live="polite">
+        <div class="empty">
+          <h2>No prediction yet</h2>
+          <p>Fill in the form and select Predict placement. The result appears here.</p>
+        </div>
+      </section>
+
+      <section class="card history">
+        <h3>Recent predictions</h3>
+        <ul id="historyList"></ul>
+        <p class="none" id="historyNone">Nothing yet. This list clears when you refresh the page.</p>
+      </section>
+    </aside>
+
+  </div>
+
+  <footer>Predictions come from a model trained on past student data. Use them to decide who gets extra help, not as a final judgement of any student.</footer>
+</div>
+
+<script>
+/* ============================================================
+   CONFIG
+   - Served by FastAPI itself (same origin): leave API_URL as ""
+   - Opened as a file or from another port: set your API address
+   ============================================================ */
+const API_URL = location.protocol === "file:" ? "http://127.0.0.1:8000" : "";
+
+/* Numeric fields: id, label, unit, min, max, step, default, group */
+const FIELDS = [
+  { id: "study_hours",           label: "Study hours",           unit: "hrs/day", min: 0,  max: 12,  step: 0.1, def: 3.5,  group: "habits" },
+  { id: "sleep_hours",           label: "Sleep hours",           unit: "hrs/day", min: 3,  max: 12,  step: 0.1, def: 6.8,  group: "habits" },
+  { id: "internet_usage",        label: "Internet usage",        unit: "hrs/day", min: 0,  max: 12,  step: 0.1, def: 4.5,  group: "habits" },
+  { id: "attendance",            label: "Attendance",            unit: "%",       min: 0,  max: 100, step: 0.1, def: 76,   group: "academics" },
+  { id: "assignments_completed", label: "Assignments completed", unit: "count",   min: 0,  max: 30,  step: 1,   def: 13,   group: "academics" },
+  { id: "previous_score",        label: "Previous exam score",   unit: "marks",   min: 0,  max: 100, step: 0.1, def: 62,   group: "academics" },
+  { id: "exam_score",            label: "Latest exam score",     unit: "marks",   min: 0,  max: 100, step: 0.1, def: 60,   group: "academics" },
+];
+
+const SAMPLES = {
+  strong: { gender: "Female", extracurricular: "Yes", branch: "CSE", study_hours: 5.5, sleep_hours: 7.2, internet_usage: 3.1, attendance: 88, assignments_completed: 19, previous_score: 78, exam_score: 82 },
+  weak:   { gender: "Male",   extracurricular: "No",  branch: "Civil", study_hours: 1.2, sleep_hours: 6.0, internet_usage: 7.5, attendance: 55, assignments_completed: 6,  previous_score: 44, exam_score: 41 },
+};
+let sampleToggle = 0;
+
+const $ = (s, r = document) => r.querySelector(s);
+const form = $("#form");
+
+/* ---------- Build numeric inputs with synced sliders ---------- */
+FIELDS.forEach(f => {
+  const box = document.createElement("div");
+  box.innerHTML = `
+    <label for="${f.id}">${f.label}</label>
+    <div class="num">
+      <input type="number" id="${f.id}" name="${f.id}" min="${f.min}" max="${f.max}" step="${f.step}" value="${f.def}" inputmode="decimal" required>
+      <span class="unit">${f.unit}</span>
+      <input type="range" id="${f.id}_range" min="${f.min}" max="${f.max}" step="${f.step}" value="${f.def}" aria-label="${f.label} slider" tabindex="-1">
+    </div>`;
+  $("#" + f.group).appendChild(box);
+
+  const num = $("#" + f.id, box), rng = $("#" + f.id + "_range", box);
+  num.addEventListener("input", () => { num.classList.remove("invalid"); if (num.value !== "") rng.value = num.value; });
+  rng.addEventListener("input", () => { num.value = rng.value; num.classList.remove("invalid"); });
+});
+
+function setValues(v) {
+  FIELDS.forEach(f => { $("#" + f.id).value = v[f.id]; $("#" + f.id + "_range").value = v[f.id]; $("#" + f.id).classList.remove("invalid"); });
+  form.querySelector(`input[name=gender][value="${v.gender}"]`).checked = true;
+  form.querySelector(`input[name=extracurricular][value="${v.extracurricular}"]`).checked = true;
+  $("#branch").value = v.branch;
+}
+function defaults() {
+  const d = { gender: "Male", extracurricular: "Yes", branch: "CSE" };
+  FIELDS.forEach(f => d[f.id] = f.def);
+  return d;
+}
+
+$("#sampleBtn").addEventListener("click", () => { setValues(sampleToggle++ % 2 === 0 ? SAMPLES.strong : SAMPLES.weak); });
+$("#resetBtn").addEventListener("click", () => {
+  setValues(defaults());
+  $("#result").innerHTML = `<div class="empty"><h2>No prediction yet</h2><p>Fill in the form and select Predict placement. The result appears here.</p></div>`;
+});
+
+/* ---------- API status check ---------- */
+async function checkApi() {
+  const box = $("#status"), txt = $("#statusText");
+  try {
+    const r = await fetch(API_URL + "/", { cache: "no-store" });
+    if (!r.ok) throw new Error();
+    box.className = "status ok"; txt.textContent = "API connected";
+  } catch {
+    box.className = "status bad"; txt.textContent = "API not reachable";
+  }
+}
+checkApi();
+
+/* ---------- Validation ---------- */
+function validate() {
+  let ok = true, first = null;
+  FIELDS.forEach(f => {
+    const el = $("#" + f.id), val = parseFloat(el.value);
+    if (el.value === "" || isNaN(val) || val < f.min || val > f.max) {
+      el.classList.add("invalid"); ok = false; first = first || el;
+    }
+  });
+  if (first) first.focus();
+  return ok;
+}
+
+/* ---------- Submit ---------- */
+const esc = s => String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
+form.addEventListener("submit", async e => {
+  e.preventDefault();
+  const result = $("#result"), btn = $("#submitBtn");
+
+  if (!validate()) {
+    result.innerHTML = `<div class="error"><strong>Some values are out of range</strong>Check the highlighted fields. Each one shows its allowed range on the slider.</div>`;
+    return;
+  }
+
+  const payload = {
+    gender: form.gender.value,
+    extracurricular: form.extracurricular.value,
+    branch: $("#branch").value,
+  };
+  FIELDS.forEach(f => payload[f.id] = parseFloat($("#" + f.id).value));
+
+  btn.disabled = true; btn.textContent = "Predicting…";
+  result.innerHTML = `<div class="empty" style="text-align:center"><div class="spinner"></div><p>Running the model…</p></div>`;
+
+  try {
+    const res = await fetch(API_URL + "/predict", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+      let detail = "";
+      try { detail = JSON.stringify((await res.json()).detail); } catch {}
+      throw new Error(`Server returned ${res.status}. ${detail}`);
+    }
+    const data = await res.json();
+    showResult(data.prediction, payload);
+    checkApi();
+  } catch (err) {
+    const network = err instanceof TypeError;
+    result.innerHTML = `<div class="error"><strong>${network ? "Could not reach the API" : "The API returned an error"}</strong>
+      ${network
+        ? `Start the server with <code>uvicorn app:app --reload</code> and check that the address is <code>${esc(API_URL || location.origin)}</code>. If this page is opened from a different address, enable CORS in app.py.`
+        : esc(err.message)}</div>`;
+    checkApi();
+  } finally {
+    btn.disabled = false; btn.textContent = "Predict placement";
+  }
+});
+
+/* ---------- Render result ---------- */
+function showResult(prediction, p) {
+  const placed = prediction === "Placed";
+  $("#result").innerHTML = `
+    <div class="verdict stamp ${placed ? "placed" : "not"}">
+      <small>Predicted outcome</small>
+      <strong>${esc(prediction)}</strong>
+    </div>
+    <p class="advice">${placed
+      ? "This student's profile looks like students who were placed. Keep up the current routine and consider mock interviews to sharpen it."
+      : "This student's profile looks like students who were not placed. Consider mentoring, practice tests and help with attendance and assignments."}</p>
+    <dl class="recap">
+      <div><dt>Branch</dt><dd>${esc(p.branch)}</dd></div>
+      <div><dt>Attendance</dt><dd>${p.attendance}%</dd></div>
+      <div><dt>Study</dt><dd>${p.study_hours} hrs</dd></div>
+      <div><dt>Assignments</dt><dd>${p.assignments_completed}</dd></div>
+      <div><dt>Previous</dt><dd>${p.previous_score}</dd></div>
+      <div><dt>Latest exam</dt><dd>${p.exam_score}</dd></div>
+    </dl>`;
+
+  const li = document.createElement("li");
+  li.innerHTML = `<span>${esc(p.branch)}, ${esc(p.gender)}, exam ${p.exam_score}</span><span class="tag ${placed ? "placed" : "not"}">${esc(prediction)}</span>`;
+  const list = $("#historyList");
+  list.prepend(li);
+  while (list.children.length > 5) list.lastChild.remove();
+  $("#historyNone").hidden = true;
+}
+</script>
+</body>
+</html>
