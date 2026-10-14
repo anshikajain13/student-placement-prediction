@@ -1,5 +1,18 @@
 # Student Placement Prediction Using Decision Tree
 
+## 🚀 Live Demo
+
+**Try the Student Placement Prediction App here:**  
+[Launch Live App](https://student-placement-prediction-50n0.onrender.com/)
+
+**API Documentation:**  
+[Explore API Docs](https://student-placement-prediction-50n0.onrender.com/docs)
+
+## 💻 Source Code
+
+[View on GitHub](https://github.com/anshikajain13/student-placement-prediction)
+
+
 ## About the Project
 
 This project is a Machine Learning application that predicts student placement outcomes using a Decision Tree classifier. It provides a web interface built with FastAPI where users can enter student-related details and receive a prediction.
